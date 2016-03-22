@@ -1,0 +1,2 @@
+# go-naivebayes
+Naive Bayesian 
