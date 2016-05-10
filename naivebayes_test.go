@@ -1,35 +1,31 @@
 package naivebayes
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestModelTrain(t *testing.T) {
 	model := NewModel("hello")
-	obs := Observation{Categories: []Category{"a", "b"}, Content: []string{"hello", "bye", "bye", "hellohello"}}
 
-	model.Train(obs)
-	if model.Counts["hello"].Counts["a"] != 1 {
-		t.Error()
-	}
+	obs1 := NewObservationFromText([]string{"China"}, "Chinese Beijing Chinese")
+	model.Train(obs1)
 
-	if model.Counts["hello"].Counts["b"] != 1 {
-		t.Error()
-	}
+	obs2 := NewObservationFromText([]string{"China"}, "Chinese Chinese Shanghai")
+	model.Train(obs2)
 
-	if model.Counts["bye"].Counts["a"] != 2 {
-		t.Error()
-	}
+	obs3 := NewObservationFromText([]string{"China"}, "Chinese Macao")
+	model.Train(obs3)
 
-	model.Train(obs)
+	obs4 := NewObservationFromText([]string{"NotChina"}, "Tokyo Japan Chinese")
+	model.Train(obs4)
 
-	if model.Counts["hello"].Counts["a"] != 2 {
-		t.Error()
-	}
+	testObs := NewObservationFromText([]string{}, "Chinese Chinese Chinese Tokyo Japan")
 
-	j, _ := json.Marshal(model)
-	fmt.Println(string(j))
+	spew.Dump(model.Classes)
+
+	fmt.Println(model.predict(testObs))
 
 }
