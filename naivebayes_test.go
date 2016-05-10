@@ -1,13 +1,8 @@
 package naivebayes
 
-import (
-	"fmt"
-	"testing"
+import "testing"
 
-	"github.com/davecgh/go-spew/spew"
-)
-
-func TestModelTrain(t *testing.T) {
+func TestModelFulle(t *testing.T) {
 	model := NewModel("hello")
 
 	obs1 := NewObservationFromText([]string{"China"}, "Chinese Beijing Chinese")
@@ -24,8 +19,17 @@ func TestModelTrain(t *testing.T) {
 
 	testObs := NewObservationFromText([]string{}, "Chinese Chinese Chinese Tokyo Japan")
 
-	spew.Dump(model.Classes)
+	expectedChina := 0.00030121377997263
+	expectedNotChina := 0.00013548070246744215
 
-	fmt.Println(model.predict(testObs))
+	predictions := model.predict(testObs)
+
+	if predictions["China"] != expectedChina {
+		t.Errorf("Did not get expected probability for China. Expected: %d, Got: %d", expectedChina, predictions["China"])
+	}
+
+	if predictions["NotChina"] != expectedNotChina {
+		t.Errorf("Did not get expected probability for NotChina. Expected: %d, Got: %d", expectedNotChina, predictions["NotChina"])
+	}
 
 }
