@@ -2,7 +2,7 @@ package naivebayes
 
 import "testing"
 
-func TestModelFulle(t *testing.T) {
+func TestModel(t *testing.T) {
 	model := NewModel("hello")
 
 	obs1 := NewObservationFromText([]string{"China"}, "Chinese Beijing Chinese")
