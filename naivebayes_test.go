@@ -1,9 +1,20 @@
 package naivebayes
 
-import "testing"
+import (
+	"fmt"
+	"reflect"
+	"testing"
+)
+
+var model *Model
+
+// round probabilities to avoid intermittent failures
+func roundProbability(p float64) (s string) {
+	return fmt.Sprintf("%.15f", s)
+}
 
 func TestModel(t *testing.T) {
-	model := NewModel("hello")
+	model = NewModel("hello")
 
 	obs1 := NewObservationFromText([]string{"China"}, "Chinese Beijing Chinese")
 	model.Train(obs1)
@@ -19,17 +30,36 @@ func TestModel(t *testing.T) {
 
 	testObs := NewObservationFromText([]string{}, "Chinese Chinese Chinese Tokyo Japan")
 
-	expectedChina := 0.00030121377997263
-	expectedNotChina := 0.00013548070246744215
+	expectedChina := roundProbability(0.00030121377997263)
+	expectedNotChina := roundProbability(0.00013548070246744215)
 
-	predictions := model.predict(testObs)
+	predictions := model.Predict(testObs)
 
-	if predictions["China"] != expectedChina {
+	if roundProbability(predictions["China"]) != expectedChina {
 		t.Errorf("Did not get expected probability for China. Expected: %d, Got: %d", expectedChina, predictions["China"])
 	}
 
-	if predictions["NotChina"] != expectedNotChina {
+	if roundProbability(predictions["NotChina"]) != expectedNotChina {
 		t.Errorf("Did not get expected probability for NotChina. Expected: %d, Got: %d", expectedNotChina, predictions["NotChina"])
+	}
+
+	name, value := predictions.BestFit()
+
+	if name != "China" {
+		t.Error("Did not predict best fit name")
+	}
+
+	if roundProbability(value) != expectedChina {
+		t.Error("Did not predict best fit value")
+	}
+}
+
+func TestSaveModel(t *testing.T) {
+	model.SaveToFile("testing.json")
+	model2 := NewModelFromFile("testing.json")
+
+	if !reflect.DeepEqual(model, model2) {
+		t.Error("Saved model and loaded model are not equal")
 	}
 
 }
