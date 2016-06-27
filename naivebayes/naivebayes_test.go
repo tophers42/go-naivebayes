@@ -2,6 +2,7 @@ package naivebayes
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -55,11 +56,19 @@ func TestModel(t *testing.T) {
 }
 
 func TestSaveModel(t *testing.T) {
-	model.SaveToFile("testing.json")
-	model2 := NewModelFromFile("testing.json")
+	saveErr := model.SaveToFile("testing.json")
+	if saveErr != nil {
+		t.Error("Failed to save model", saveErr)
+	}
+	model2, loadErr := NewModelFromFile("testing.json")
+
+	if loadErr != nil {
+		t.Error("Failed to load model", loadErr)
+	}
 
 	if !reflect.DeepEqual(model, model2) {
 		t.Error("Saved model and loaded model are not equal")
 	}
 
+	os.Remove("testing.json")
 }

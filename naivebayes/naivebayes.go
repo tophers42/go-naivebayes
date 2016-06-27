@@ -84,27 +84,25 @@ func NewModel(name string) *Model {
 	return &Model{Name: name, Classes: make(map[string]*Class), ObservationCount: 0, Vocabulary: make(map[string]int)}
 }
 
-func NewModelFromFile(path string) (m *Model) {
+func NewModelFromFile(path string) (m *Model, err error) {
 	// read the whole thing at once
 	m = &Model{}
 	jsonModel, err := ioutil.ReadFile(path)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	err = json.Unmarshal(jsonModel, m)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return m
+	return m, nil
 }
 
-func (m *Model) SaveToFile(path string) {
+func (m *Model) SaveToFile(path string) (err error) {
 	jsonModel, _ := json.Marshal(m)
 	// write the whole thing at once
-	err := ioutil.WriteFile(path, jsonModel, 0644)
-	if err != nil {
-		panic(err)
-	}
+	err = ioutil.WriteFile(path, jsonModel, 0644)
+	return err
 }
 
 /*
