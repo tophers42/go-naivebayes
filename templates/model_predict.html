@@ -1,6 +1,5 @@
-<h1>Create a new model</h1>
-
-<form action="/model" method="POST">
-<div><textarea name="model_name" rows="20" cols="80">Name</textarea></div>
-<div><input type="submit" value="Create"></div>
+<h1>Predict class membership for an observation using model: "{{.Name}}"</h1>
+<form action="/model/{{.Name}}/predict" method="POST">
+<div><textarea name="predict_text" rows="20" cols="80"></textarea></div>
+<div><input type="submit" value="Predict"></div>
 </form>
