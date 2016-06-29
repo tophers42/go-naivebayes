@@ -5,11 +5,6 @@ NaiveBayes text classifier.
 Based on: http://nlp.stanford.edu/IR-book/html/htmledition/naive-bayes-text-classification-1.html
 
 TODO:
-	* rearrange/rename
-	* cleanup comments
-	* expand tests
-	* wrapper web server
-	* dockerize
 	* smarter text parsing ( stemming, synonyms )
 */
 

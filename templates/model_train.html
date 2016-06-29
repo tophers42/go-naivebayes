@@ -1,0 +1,6 @@
+<h1>Train model: "{{.Name}}" with a new observation</h1>
+<form action="/model/{{.Name}}/train" method="POST">
+<div>Classes (comma-delmited):<input type="text" name="observation_classes"></input></div>
+<div>Text: <textarea name="observation_text" rows="20" cols="80"></textarea></div>
+<div><input type="submit" value="Train"></div>
+</form>
