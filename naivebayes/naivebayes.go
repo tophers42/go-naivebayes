@@ -5,7 +5,6 @@ NaiveBayes text classifier.
 Based on: http://nlp.stanford.edu/IR-book/html/htmledition/naive-bayes-text-classification-1.html
 
 TODO:
-	* add documentation
 	* smarter text parsing ( stemming, synonyms )
 */
 
@@ -16,11 +15,13 @@ import (
 	"strings"
 )
 
+// Observation struct. Represents an instance of text to be classified (or for training).
 type Observation struct {
 	Classes    []string
 	WordCounts map[string]int
 }
 
+// Creates an observation object. Breaks up a block of text on " " and calculates word counts.
 func NewObservationFromText(classes []string, text string) *Observation {
 	counts := make(map[string]int)
 	for _, word := range strings.Split(text, " ") {
@@ -33,8 +34,11 @@ func NewObservationFromText(classes []string, text string) *Observation {
 	return &Observation{Classes: classes, WordCounts: counts}
 }
 
+// Prediction type. A mapping of class names to calculated probabilities.
+// Returned when calling Predict on a trained model with a new observation.
 type Prediction map[string]float64
 
+// Filters a prediction down to the best fit, returning just the class name and calulated probability.
 func (p *Prediction) BestFit() (bestClassName string, bestProbability float64) {
 	for className, probability := range *p {
 		if bestClassName == "" || probability > bestProbability {
@@ -45,9 +49,7 @@ func (p *Prediction) BestFit() (bestClassName string, bestProbability float64) {
 	return bestClassName, bestProbability
 }
 
-/*
-Class struct
-*/
+// Class struct (a.k.a category). Represents a grouping of observations that belong together.
 type Class struct {
 	Name             string
 	ObservationCount int
@@ -55,20 +57,19 @@ type Class struct {
 	TotalCount       int
 }
 
-// Build an empty class struct
+// Creates an empty class struct
 func NewClass(name string) *Class {
 	return &Class{Name: name, WordCounts: make(map[string]int), TotalCount: 0}
 }
 
-// Increment the count for the given word on the class
+// Increments the count for the given word on the class.
 func (c *Class) addWord(word string, count int) {
 	c.WordCounts[word] += count
 	c.TotalCount += count
 }
 
-/*
-Model struct
-*/
+// Model struct. Represents a training set and can be used to make class membership
+// predictions on new observations.
 type Model struct {
 	Name             string
 	Classes          map[string]*Class
@@ -76,10 +77,13 @@ type Model struct {
 	Vocabulary       map[string]int
 }
 
+// Creates and empty model with a name
 func NewModel(name string) *Model {
 	return &Model{Name: name, Classes: make(map[string]*Class), ObservationCount: 0, Vocabulary: make(map[string]int)}
 }
 
+// Creates a new model and loads its state from the given file.
+// ( Model state is stored as a simple json dump of the Model struct)
 func NewModelFromFile(path string) (m *Model, err error) {
 	// read the whole thing at once
 	m = &Model{}
@@ -94,6 +98,8 @@ func NewModelFromFile(path string) (m *Model, err error) {
 	return m, nil
 }
 
+// Dumps the current state of the Model to the given file.
+// ( Model state is stored as a simple json dump of the Model struct)
 func (m *Model) SaveToFile(path string) (err error) {
 	jsonModel, _ := json.Marshal(m)
 	// write the whole thing at once
@@ -101,36 +107,7 @@ func (m *Model) SaveToFile(path string) (err error) {
 	return err
 }
 
-/*
- P( class ) - prior probability of this class within the model
- Number of occurences of the class / Number of trained observations
-*/
-func (m *Model) classPriorProbability(class *Class) (p float64) {
-	p = math.Log(float64(class.ObservationCount) / float64(m.ObservationCount))
-	return p
-
-}
-
-/*
- P( observation | class ) - conditional probability of this observation
- given the class.
- Multiply the probabilities of each word being in this class (sum logs)
- P( word | class ) - probability of a word, given a class
- Occurences of the word within the class, divided by total number of words
- Laplace smoothing (always add one so new words don't break everything)
- and also add unique word count to denominator
-*/
-func (m *Model) classConditionalProbability(class *Class, o *Observation) (p float64) {
-	p = 0
-	for word, count := range o.WordCounts {
-		classWordCount, _ := class.WordCounts[word]
-		raw := float64(classWordCount+1) / float64(class.TotalCount+len(m.Vocabulary))
-		p = p + (math.Log(raw) * float64(count))
-	}
-	return p
-}
-
-// train the model with the given observation
+// Trains the Model with the given Observation
 func (m *Model) Train(o *Observation) {
 	for _, className := range o.Classes {
 		class, ok := m.Classes[className]
@@ -148,13 +125,46 @@ func (m *Model) Train(o *Observation) {
 	m.ObservationCount++
 }
 
-// calculate observation membership probability for each class
+// Calculates the posterior probabality for the given observation for each
+// class within the Model. Returns a Prediction object.
 func (m *Model) Predict(o *Observation) (p Prediction) {
 	p = make(map[string]float64)
 
 	for _, class := range m.Classes {
 		classConditionalProbability := m.classPriorProbability(class) + m.classConditionalProbability(class, o)
 		p[class.Name] = math.Exp(classConditionalProbability)
+	}
+	return p
+}
+
+/*
+	Calculates the prior probability of the given class for the Model.
+	P( class ) - Number of occurences of the class / Number of trained observations
+*/
+func (m *Model) classPriorProbability(class *Class) (p float64) {
+	p = math.Log(float64(class.ObservationCount) / float64(m.ObservationCount))
+	return p
+
+}
+
+/*
+	Calculates the conditional probability of the given observation for the
+	given class within the Model.
+	P( observation | class ) - conditional probability of this observation
+	given the class.
+	Multiplies the probabilities of each word being in this class (sum logs)
+	P( word | class ) - probability of a word, given a class
+	Occurences of the word within the class, divided by total number of words
+	( words in class plus total number of unique words seen by the model )
+	Laplace smoothing (always add one so new words don't break everything)
+	and also add unique word count to denominator
+*/
+func (m *Model) classConditionalProbability(class *Class, o *Observation) (p float64) {
+	p = 0
+	for word, count := range o.WordCounts {
+		classWordCount, _ := class.WordCounts[word]
+		raw := float64(classWordCount+1) / float64(class.TotalCount+len(m.Vocabulary))
+		p = p + (math.Log(raw) * float64(count))
 	}
 	return p
 }
