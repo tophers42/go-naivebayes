@@ -2,18 +2,18 @@ package naivebayes
 
 import (
 	"fmt"
-	"os"
-	"reflect"
 	"testing"
 )
 
 var model *Model
 
-// round probabilities to avoid intermittent failures
+// roundProbability rounds probabilities to avoid intermittent failures
 func roundProbability(p float64) (s string) {
 	return fmt.Sprintf("%.15f", s)
 }
 
+// TestModel is an overall test
+// Creates a new model, trains it, and checks predicted probablities
 func TestModel(t *testing.T) {
 	model = NewModel("hello")
 
@@ -53,22 +53,4 @@ func TestModel(t *testing.T) {
 	if roundProbability(value) != expectedChina {
 		t.Error("Did not predict best fit value")
 	}
-}
-
-func TestSaveModel(t *testing.T) {
-	saveErr := model.SaveToFile("testing.json")
-	if saveErr != nil {
-		t.Error("Failed to save model", saveErr)
-	}
-	model2, loadErr := NewModelFromFile("testing.json")
-
-	if loadErr != nil {
-		t.Error("Failed to load model", loadErr)
-	}
-
-	if !reflect.DeepEqual(model, model2) {
-		t.Error("Saved model and loaded model are not equal")
-	}
-
-	os.Remove("testing.json")
 }

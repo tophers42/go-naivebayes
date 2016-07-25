@@ -20,86 +20,92 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// App struct
-type app struct {
+// Config struct
+type Config struct {
+	TemplateDir string
+	ModelDir    string
+	Port        string
+}
+
+// NaiveBayesApp struct
+type NaiveBayesApp struct {
 	templates *template.Template
 	modelDir  string
 	models    map[string]*Model
 	port      string
 }
 
-// Creates a new App object, that stores models and some configuration in memory
-func NewApp(port string) (newApp *app) {
-	// init a model storage dir
-	modelDir := "saved_models"
-	os.Mkdir(modelDir, 0775)
+// NewNaiveBayes creates and returns new App object.
+// This object stores models and some configuration in memory.
+func NewNaiveBayesApp(c *Config) (app *NaiveBayesApp) {
 
-	// app.validModelName = regexp.MustCompile("([a-zA-Z0-9]+)$")
+	// init a model storage dir
+	os.Mkdir(c.ModelDir, 0775)
 
 	// init the templates
-	var templates = template.Must(template.ParseFiles("templates/model_create.html", "templates/model_predict.html", "templates/model_train.html"))
-	fmt.Println(templates.DefinedTemplates())
+	var templates = template.Must(template.ParseGlob(c.TemplateDir + "/*"))
 
-	newApp = &app{templates: templates, models: make(map[string]*Model), modelDir: modelDir, port: port}
-	return newApp
+	return &NaiveBayesApp{templates: templates, models: make(map[string]*Model), modelDir: c.ModelDir, port: c.Port}
 }
 
-// Registers the endpoints to listen on and starts the server listening on the requested port
-func (app *app) StartServer() {
-	app.registerEndpoints()
+// StartServer starts the server listening on the port defined by the app object.
+func (app *NaiveBayesApp) StartServer() {
 	log.Printf("Listening on port: %s", app.port)
-	log.Fatal(http.ListenAndServe(app.port, nil))
+	log.Fatal(http.ListenAndServe(app.port, app.Handlers()))
 }
 
 /*
-   Registers all the endpoints the app will handle.
-   Mapping url paths to handler functions.
+   Handlers registers all the endpoints the app will handle.
+   Maps url paths to handler functions and returns a router object.
 */
-func (app *app) registerEndpoints() {
-	router := mux.NewRouter()
-	router.HandleFunc("/model", app.makeHandler(app.modelCreate)).Methods("GET", "POST")
-	router.HandleFunc("/models", app.makeHandler(app.modelList)).Methods("GET")
-	router.HandleFunc("/model/{modelName}", app.makeHandler(app.modelView)).Methods("GET")
-	router.HandleFunc("/model/{modelName}/train", app.makeHandler(app.modelTrain)).Methods("GET", "POST")
-	router.HandleFunc("/model/{modelName}/predict", app.makeHandler(app.modelPredict)).Methods("GET", "POST")
-	http.Handle("/", router)
+func (app *NaiveBayesApp) Handlers() (router *mux.Router) {
+	router = mux.NewRouter()
+	router.HandleFunc("/model", app.makeHandler(app.createModel)).Methods("GET", "POST")
+	router.HandleFunc("/models", app.makeHandler(app.listModels)).Methods("GET")
+	router.HandleFunc("/model/{modelName}", app.makeHandler(app.viewModel)).Methods("GET")
+	router.HandleFunc("/model/{modelName}/train", app.makeHandler(app.trainModel)).Methods("GET", "POST")
+	router.HandleFunc("/model/{modelName}/predict", app.makeHandler(app.predictModel)).Methods("GET", "POST")
+	return router
 }
 
 /*
-   Wrapper for specific request handling functions. Adds and "access" log to each request
-   and provide application state to each handler function
+   makeHandler is a wrapper for request handling functions.
+   Simple "access" logs are added to each request
+   application state is provided to each handler function.
 */
-func (app *app) makeHandler(handlerFunc func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+func (app *NaiveBayesApp) makeHandler(handlerFunc func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
 		log.Printf("Handling request to: %s", request.URL.Path)
 		handlerFunc(response, request)
 	}
 }
 
-// Renders the given template, throwing an http error if there's an issue
-func (app *app) renderTemplate(response http.ResponseWriter, tmpl string, data interface{}) {
+// renderTemplate renders the given template,
+// throwing an http error if there's an issue.
+func (app *NaiveBayesApp) renderTemplate(response http.ResponseWriter, tmpl string, data interface{}) {
 	err := app.templates.ExecuteTemplate(response, tmpl, data)
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-// Returns the storage path for a given modelName
-func (app *app) modelPath(modelName string) (path string) {
+// modelPath returns the storage path for a given modelName
+func (app *NaiveBayesApp) modelPath(modelName string) (path string) {
 	return app.modelDir + "/" + modelName + ".json"
 }
 
 /*
-   Loads and returns the model instance for the given modelName.
+   loadModel loads and returns the model instance for the given modelName.
    First checks app.models for an in memory copy, then tries to load the model from a file
 */
-func (app *app) loadModel(modelName string) (model *Model, err error) {
+func (app *NaiveBayesApp) loadModel(modelName string) (model *Model, err error) {
 	model, ok := app.models[modelName]
 	if ok {
 		return model, nil
 	}
 	log.Printf("Model: '%s' not found in memory. Falling back to file.", modelName)
-	model, err = NewModelFromFile(app.modelPath(modelName))
+	model = &Model{}
+	err = LoadFromFile(app.modelPath(modelName), model, json.Unmarshal)
 	if err == nil {
 		app.models[modelName] = model
 		return model, nil
@@ -108,15 +114,16 @@ func (app *app) loadModel(modelName string) (model *Model, err error) {
 	return nil, fmt.Errorf("Unable to load model: '%s'", modelName)
 }
 
-// Loads all the models in app.modelDir into app.models.
-func (app *app) loadAllModels() (err error) {
+// loadAllModels loads all the models found in app.modelDir into app.models.
+func (app *NaiveBayesApp) loadAllModels() (err error) {
 	files, err := ioutil.ReadDir(app.modelDir)
 	if err != nil {
 		log.Printf("Failed to load all models from dir: '%s' with error: '%s'", app.modelDir, err)
 		return err
 	}
 	for _, file := range files {
-		model, err := NewModelFromFile(app.modelDir + "/" + file.Name())
+		model := &Model{}
+		err = LoadFromFile(app.modelDir+"/"+file.Name(), model, json.Unmarshal)
 		if err != nil {
 			log.Printf("Failed to load model from file: '%s' with error: '%s'", file.Name(), err)
 		} else {
@@ -127,17 +134,22 @@ func (app *app) loadAllModels() (err error) {
 	return nil
 }
 
+// clearLoadedModels clears all the loaded models from app.models.
+func (app *NaiveBayesApp) clearCachedModels() {
+	app.models = map[string]*Model{}
+}
+
 /*
    ENDPOINT HANDLERS
 */
 
 /*
-   Displays a model creation form and handles form submission,
+   createModel displays a model creation form and handles form submission,
    creating a new model based on input
    * GET model - Display new model form
    * POST model - Create a new model
 */
-func (app *app) modelCreate(response http.ResponseWriter, request *http.Request) {
+func (app *NaiveBayesApp) createModel(response http.ResponseWriter, request *http.Request) {
 	if request.Method == "GET" {
 		app.renderTemplate(response, "model_create.html", nil)
 	} else if request.Method == "POST" {
@@ -148,7 +160,7 @@ func (app *app) modelCreate(response http.ResponseWriter, request *http.Request)
 			fmt.Fprintf(response, "Model by that name already exists: '%s'", modelName)
 		} else {
 			model := NewModel(modelName)
-			err := model.SaveToFile("saved_models/" + modelName + ".json")
+			err := SaveToFile("saved_models/"+modelName+".json", model, json.Marshal)
 			if err != nil {
 				http.Error(response, err.Error(), http.StatusInternalServerError)
 			} else {
@@ -161,10 +173,10 @@ func (app *app) modelCreate(response http.ResponseWriter, request *http.Request)
 }
 
 /*
-   Displays a model in JSON form.
+   viewModel displays a model in JSON form.
    * GET model/<name> - view model
 */
-func (app *app) modelView(response http.ResponseWriter, request *http.Request) {
+func (app *NaiveBayesApp) viewModel(response http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	modelName := vars["modelName"]
 	model, err := app.loadModel(modelName)
@@ -178,11 +190,11 @@ func (app *app) modelView(response http.ResponseWriter, request *http.Request) {
 }
 
 /*
-   Displays the list of loaded models in JSON form.
+   listModels displays the list of loaded models in JSON form.
    Handles "load_all" query param to force loading of all models from files into memory.
    * GET /models - Display the list of models
 */
-func (app *app) modelList(response http.ResponseWriter, request *http.Request) {
+func (app *NaiveBayesApp) listModels(response http.ResponseWriter, request *http.Request) {
 	if request.FormValue("load_all") == "1" {
 		err := app.loadAllModels()
 		if err != nil {
@@ -198,12 +210,12 @@ func (app *app) modelList(response http.ResponseWriter, request *http.Request) {
 }
 
 /*
-   Displays a form for training a model with an new observation and handles
+   trainModel displays a form for training a model with an new observation and handles
    form submission, training the given model
    * GET /model/<name>/train - Displays model train form
    * POST /model/<name/train - Trains the given model with the input observation
 */
-func (app *app) modelTrain(response http.ResponseWriter, request *http.Request) {
+func (app *NaiveBayesApp) trainModel(response http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	modelName := vars["modelName"]
 	model, err := app.loadModel(modelName)
@@ -220,18 +232,19 @@ func (app *app) modelTrain(response http.ResponseWriter, request *http.Request) 
 		observation := NewObservationFromText(observation_classes, observation_text)
 		model.Train(observation)
 		log.Printf("Trained model: '%s' with new observation for classes: '%s'", model.Name, observation_classes)
-		model.SaveToFile(app.modelPath(model.Name))
+		SaveToFile(app.modelPath(model.Name), model, json.Marshal)
 		http.Redirect(response, request, "/model/"+modelName, 301)
 	}
 }
 
 /*
-   Displays a form for predicting classes for a new observation based on the given model
+   predictModel displays a form for predicting classes
+   for a new observation based on the given model
    and handles form submission returning the results of the prediction in JSON
    * GET /model/<name>/predict - Displays model prediction form
    * POST /model/<name/predict - Predicts the class for the input using the given model
 */
-func (app *app) modelPredict(response http.ResponseWriter, request *http.Request) {
+func (app *NaiveBayesApp) predictModel(response http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	modelName := vars["modelName"]
 	model, err := app.loadModel(modelName)
