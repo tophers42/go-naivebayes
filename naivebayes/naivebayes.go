@@ -11,8 +11,6 @@ TODO:
 */
 
 import (
-	"encoding/json"
-	"io/ioutil"
 	"math"
 	"strings"
 )
@@ -87,31 +85,6 @@ type Model struct {
 // NewModel creates and empty Model with the given name.
 func NewModel(name string) *Model {
 	return &Model{Name: name, Classes: make(map[string]*Class), ObservationCount: 0, Vocabulary: make(map[string]int)}
-}
-
-// NewModelFromFile creates a new Model and loads its state from the given file.
-// (Model state is stored as a simple json dump of the Model struct).
-func NewModelFromFile(path string) (m *Model, err error) {
-	// read the whole thing at once
-	m = &Model{}
-	jsonModel, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(jsonModel, m)
-	if err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-// SaveToFile dumps the current state of the Model to the given file.
-// (Model state is stored as a simple json dump of the Model struct).
-func (m *Model) SaveToFile(path string) (err error) {
-	jsonModel, _ := json.Marshal(m)
-	// write the whole thing at once
-	err = ioutil.WriteFile(path, jsonModel, 0644)
-	return err
 }
 
 // Train updates (trains) the Model with the given Observation.
