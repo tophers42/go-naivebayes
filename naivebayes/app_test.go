@@ -17,27 +17,44 @@ var (
 )
 
 func init() {
-	conf := &Config{TemplateDir: "templates", ModelDir: "test_files/models", Port: ":8080"}
+	conf := &Config{ModelDir: "test_files/models", Port: ":8080"}
 
 	app = NewNaiveBayesApp(conf)
 
 	server = httptest.NewServer(app.Handlers())
 }
 
+func unmarshalJSONResponse(t *testing.T, endpoint string, expectedStatus int, v interface{}) (response *http.Response) {
+	response, responseError := http.Get(server.URL + endpoint)
+
+	if responseError != nil {
+		t.Errorf("Failed to get response from: %s. Error: %v", endpoint, responseError)
+	}
+
+	if response.StatusCode != expectedStatus {
+		t.Errorf("Did not recieve expected status: %d from: %s. Recieved status: %v", expectedStatus, endpoint, response.StatusCode)
+	}
+
+	responseData, responseReadError := ioutil.ReadAll(response.Body)
+
+	if responseReadError != nil {
+		t.Errorf("Failed to read response from: %s. Error: %v", endpoint, responseReadError)
+	}
+
+	unmarshalError := json.Unmarshal(responseData, v)
+	if unmarshalError != nil {
+		t.Errorf("Failed to unmarshal response data from: %s. Error: %v", endpoint, unmarshalError)
+	}
+
+	return response
+}
+
 func TestCreateModel(t *testing.T) {
 
 }
 
-func TestViewExistingModel(t *testing.T) {
-	response, responseError := http.Get(server.URL + "/model/test_model")
-
-	if responseError != nil {
-		t.Errorf("Failed to get response from model view. Error: %v", responseError)
-	}
-
-	if response.StatusCode != http.StatusOK {
-		t.Errorf("Did not recieve StatusOK response from model view endpoint. Status: %v", response.StatusCode)
-	}
+func TestViewModel(t *testing.T) {
+	endpoint := "/model"
 
 	expectedModel := &Model{}
 	loadModelError := LoadFromFile(app.modelDir+"/test_model.json", expectedModel, json.Unmarshal)
@@ -46,76 +63,51 @@ func TestViewExistingModel(t *testing.T) {
 		t.Errorf("Failed to load expected model from file: %v", loadModelError)
 	}
 
-	responseData, responseReadError := ioutil.ReadAll(response.Body)
-
-	if responseReadError != nil {
-		t.Errorf("Failed to read response: %v", responseReadError)
-	}
-
 	retrievedModel := &Model{}
-	unmarshalError := json.Unmarshal(responseData, retrievedModel)
-	if unmarshalError != nil {
-		t.Errorf("Failed to unmarshal retrieved model: %v", unmarshalError)
-	}
+	_ = unmarshalJSONResponse(t, endpoint+"/test_model", http.StatusOK, retrievedModel)
 
 	if !reflect.DeepEqual(&expectedModel, &retrievedModel) {
 		t.Errorf("Retrieved model (%v) did not match expected model (%v).", retrievedModel, expectedModel)
 	}
+
+	cachedModel := &Model{}
+	_ = unmarshalJSONResponse(t, endpoint+"/test_model", http.StatusOK, cachedModel)
+
+	if !reflect.DeepEqual(&retrievedModel, &cachedModel) {
+		t.Errorf("Cached model (%v) did not match retrieved model (%v).", retrievedModel, expectedModel)
+	}
+
+	missingModel := &Model{}
+	_ = unmarshalJSONResponse(t, endpoint+"/missing_model", http.StatusNotFound, missingModel)
 }
 
-func TestViewMissingModel(t *testing.T) {
-	response, responseError := http.Get(server.URL + "/model/this_model_does_not_exist")
+// func TestListModels(t *testing.T) {
+// 	endpoint := "/models"
 
-	if responseError != nil {
-		t.Errorf("Failed to get response from model view. Error: %v", responseError)
-	}
+// 	retrievedModels := []*Model{}
+// 	unmarshalError := json.Unmarshal(responseData, &retrievedModels)
+// 	if unmarshalError != nil {
+// 		t.Errorf("Failed to unmarshal retrieved models: %v", unmarshalError)
+// 	}
 
-	if response.StatusCode != http.StatusNotFound {
-		t.Errorf("Did not recieve StatusNotFound response from model view endpoint. Status: %v", response.StatusCode)
-	}
-}
+// 	expectedTestModel := &Model{}
+// 	loadTestModelError := LoadFromFile(app.modelDir+"/test_model.json", expectedTestModel, json.Unmarshal)
 
-func TestListModels(t *testing.T) {
-	response, responseError := http.Get(server.URL + "/models")
+// 	if loadTestModelError != nil {
+// 		t.Errorf("Failed to load expected model from file: %v", loadTestModelError)
+// 	}
 
-	if responseError != nil {
-		t.Errorf("Failed to get response from model view. Error: %v", responseError)
-	}
+// 	expectedModels := []*Model{expectedTestModel}
 
-	if response.StatusCode != http.StatusOK {
-		t.Errorf("Did not recieve StatusOK response from model list endpoint. Status: %v", response.StatusCode)
-	}
+// 	if !reflect.DeepEqual(&expectedModels, &retrievedModels) {
+// 		t.Errorf("Retrieved models (%v) did not match expected models (%v).", retrievedModels, expectedModels)
+// 	}
 
-	responseData, responseReadError := ioutil.ReadAll(response.Body)
+// 	// expectedTestModel2 := &Model{}
+// 	// loadTestModel2Error := LoadFromFile(app.modelDir+"/test_model2.json", expectedTestModel2, json.Unmarshal)
 
-	if responseReadError != nil {
-		t.Errorf("Failed to read response: %v", responseReadError)
-	}
+// 	// if loadTestModel2Error != nil {
+// 	// 	t.Errorf("Failed to load expected model from file: %v", loadTestModel2Error)
+// 	// }
 
-	retrievedModels := []*Model{}
-	unmarshalError := json.Unmarshal(responseData, &retrievedModels)
-	if unmarshalError != nil {
-		t.Errorf("Failed to unmarshal retrieved models: %v", unmarshalError)
-	}
-
-	expectedTestModel := &Model{}
-	loadTestModelError := LoadFromFile(app.modelDir+"/test_model.json", expectedTestModel, json.Unmarshal)
-
-	if loadTestModelError != nil {
-		t.Errorf("Failed to load expected model from file: %v", loadTestModelError)
-	}
-
-	expectedModels := []*Model{expectedTestModel}
-
-	if !reflect.DeepEqual(&expectedModels, &retrievedModels) {
-		t.Errorf("Retrieved models (%v) did not match expected models (%v).", retrievedModels, expectedModels)
-	}
-
-	// expectedTestModel2 := &Model{}
-	// loadTestModel2Error := LoadFromFile(app.modelDir+"/test_model2.json", expectedTestModel2, json.Unmarshal)
-
-	// if loadTestModel2Error != nil {
-	// 	t.Errorf("Failed to load expected model from file: %v", loadTestModel2Error)
-	// }
-
-}
+// }
