@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 
 	"github.com/gorilla/mux"
 )
@@ -207,14 +208,18 @@ func (app *NaiveBayesApp) viewModel(request *JSONRequest) *JSONResponse {
 }
 
 /*
-   listModels displays the list of loaded models in JSON form.
-   Handles "load_all" query param to force loading of all models from files into memory.
+   listModels displays the list of loaded models in JSON form, in alphabetical order.
    * GET /models - Display the list of models
 */
 func (app *NaiveBayesApp) listModels(request *JSONRequest) *JSONResponse {
 	modelList := []*Model{}
-	for _, model := range app.models {
-		modelList = append(modelList, model)
+	var sortedNames []string
+	for k := range app.models {
+		sortedNames = append(sortedNames, k)
+	}
+	sort.Strings(sortedNames)
+	for _, modelName := range sortedNames {
+		modelList = append(modelList, app.models[modelName])
 	}
 	return &JSONResponse{Data: modelList, Code: http.StatusOK}
 }

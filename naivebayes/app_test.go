@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	app    *NaiveBayesApp
-	reader io.Reader
-	server *httptest.Server
+	app         *NaiveBayesApp
+	reader      io.Reader
+	server      *httptest.Server
+	invalidJSON []byte
 )
 
 func init() {
@@ -25,6 +26,16 @@ func init() {
 	app = NewNaiveBayesApp(conf)
 
 	server = httptest.NewServer(app.Handlers())
+
+	invalidJSON = []byte("{]{]{]this is not valid json![}[}[}")
+}
+
+func cleanupModel(t *testing.T, modelName string) {
+	delete(app.models, modelName)
+	cleanUpErr := os.Remove(app.modelPath(modelName))
+	if cleanUpErr != nil {
+		t.Fatalf("Failed to clean up model: %s test: %v", modelName, cleanUpErr)
+	}
 }
 
 func unmarshalJSONResponse(t *testing.T, request *http.Request, expectedStatus int, v interface{}) (response *http.Response) {
@@ -92,20 +103,14 @@ func TestCreateModel(t *testing.T) {
 		t.Errorf("Overwritten model (%v) did not match expected model (%v).", overwriteModel, overwrittenModel)
 	}
 
-	invalidJSON := []byte("{]{]{]this is not valid json![}[}[}")
+	invalidModel := &Model{}
 	invalidRequest, invalidRequestErr := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(invalidJSON))
 	if invalidRequestErr != nil {
 		t.Errorf("Failed to generate request: %v", invalidRequestErr)
 	}
-	_ = unmarshalJSONResponse(t, invalidRequest, http.StatusBadRequest, createdModel)
+	_ = unmarshalJSONResponse(t, invalidRequest, http.StatusBadRequest, invalidModel)
 
-	//clean up
-	delete(app.models, "create_model")
-	cleanUpErr := os.Remove(app.modelDir + "/create_model.json")
-	if cleanUpErr != nil {
-		t.Fatalf("Failed to clean up after create model test: %v", cleanUpErr)
-	}
-
+	cleanupModel(t, "create_model")
 }
 
 func TestViewModel(t *testing.T) {
@@ -160,6 +165,47 @@ func TestListModels(t *testing.T) {
 	_ = unmarshalJSONResponse(t, retrieveRequest, http.StatusOK, &retrievedModels)
 
 	if !reflect.DeepEqual(&expectedModels, &retrievedModels) {
-		t.Errorf("Retrieved model (%v) did not match expected model (%v).", retrievedModels, expectedModels)
+		t.Errorf("Retrieved models (%v) did not match expected models (%v).", retrievedModels, expectedModels)
 	}
+}
+
+func TestTrainModel(t *testing.T) {
+	// setup
+	trainModel := NewModel("train_model")
+	trainModelJSON, _ := json.Marshal(trainModel)
+	createRequest, createRequestErr := http.NewRequest(http.MethodPost, server.URL+"/model", bytes.NewBuffer(trainModelJSON))
+	if createRequestErr != nil {
+		t.Errorf("Failed to generate request: %v", createRequestErr)
+	}
+	http.DefaultClient.Do(createRequest)
+
+	testObservation := NewObservationFromText([]string{"testing"}, "test observation")
+	testObservationJSON, _ := json.Marshal(testObservation)
+	trainRequest, trainRequestErr := http.NewRequest(http.MethodPost, server.URL+"/model/train_model/train", bytes.NewBuffer(testObservationJSON))
+	if trainRequestErr != nil {
+		t.Errorf("Failed to generate request: %v", trainRequestErr)
+	}
+	trainedModel := &Model{}
+	_ = unmarshalJSONResponse(t, trainRequest, http.StatusOK, &trainedModel)
+
+	trainModel.Train(testObservation)
+	if !reflect.DeepEqual(&trainModel, &trainedModel) {
+		t.Errorf("Retrieved trained (%v) did not match expected model (%v).", trainedModel, trainModel)
+	}
+
+	missingRequest, missingRequestErr := http.NewRequest(http.MethodPost, server.URL+"/model/missing_model/train", bytes.NewBuffer(testObservationJSON))
+	if missingRequestErr != nil {
+		t.Errorf("Failed to generate request: %v", missingRequestErr)
+	}
+	missingModel := &Model{}
+	_ = unmarshalJSONResponse(t, missingRequest, http.StatusNotFound, &missingModel)
+
+	invalidRequest, invalidRequestErr := http.NewRequest(http.MethodPost, server.URL+"/model/train_model/train", bytes.NewBuffer(invalidJSON))
+	if invalidRequestErr != nil {
+		t.Errorf("Failed to generate request: %v", invalidRequestErr)
+	}
+	invalidModel := &Model{}
+	_ = unmarshalJSONResponse(t, invalidRequest, http.StatusBadRequest, &invalidModel)
+
+	cleanupModel(t, "train_model")
 }
