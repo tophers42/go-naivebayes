@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 )
 
+// SaveToFile saves the given interface to the given path using the given marshalling function
+// to convert the interface into a printable []byte
 func SaveToFile(path string, v interface{}, marshalFunc func(v interface{}) ([]byte, error)) (err error) {
 
 	marshalledData, err := marshalFunc(v)
@@ -19,6 +21,8 @@ func SaveToFile(path string, v interface{}, marshalFunc func(v interface{}) ([]b
 	return nil
 }
 
+// LoadFromFile loads the data from the given path using the given unmmarshalling function
+// to convert the []byte data into an interface
 func LoadFromFile(path string, v interface{}, unmarshalFunc func(data []byte, v interface{}) error) (err error) {
 
 	fileBuf, err := ioutil.ReadFile(path)

@@ -1,1 +1,0 @@
-{"Name":"Example","Classes":{"class_a":{"Name":"class_a","ObservationCount":1,"WordCounts":{"a":4,"test":2,"text":2},"TotalCount":8},"class_b":{"Name":"class_b","ObservationCount":1,"WordCounts":{"b":4,"test":2,"text":2},"TotalCount":8}},"ObservationCount":2,"Vocabulary":{"a":1,"b":1,"test":1,"text":1}}

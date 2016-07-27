@@ -66,7 +66,7 @@ func (j *JSONResponse) render(w http.ResponseWriter) {
 		err = encoder.Encode(j.Data)
 	}
 	if err != nil {
-		log.Print("Failed to write json response.")
+		log.Printf("Failed to write json response: %v.", err)
 	}
 }
 
@@ -140,11 +140,6 @@ func (app *NaiveBayesApp) loadAllModels() (err error) {
 	return nil
 }
 
-// clearLoadedModels clears all the loaded models from app.models.
-func (app *NaiveBayesApp) clearCachedModels() {
-	app.models = map[string]*Model{}
-}
-
 // StartServer starts the server listening on the port defined by the app object.
 func (app *NaiveBayesApp) StartServer() {
 	log.Printf("Listening on port: %s", app.port)
@@ -182,7 +177,7 @@ func (app *NaiveBayesApp) createModel(request *JSONRequest) *JSONResponse {
 
 	_, exists := app.models[model.Name]
 
-	if exists && request.Param("overwrite") != nil {
+	if exists && request.Param("overwrite") == nil {
 		return &JSONResponse{Error: fmt.Errorf("Could not create new model. Model %s already exists.", model.Name), Code: http.StatusConflict}
 	}
 
