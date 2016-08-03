@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 
 	"github.com/gorilla/mux"
 )
@@ -66,7 +67,7 @@ func (j *JSONResponse) render(w http.ResponseWriter) {
 		err = encoder.Encode(j.Data)
 	}
 	if err != nil {
-		log.Print("Failed to write json response.")
+		log.Printf("Failed to write json response: %v.", err)
 	}
 }
 
@@ -140,11 +141,6 @@ func (app *NaiveBayesApp) loadAllModels() (err error) {
 	return nil
 }
 
-// clearLoadedModels clears all the loaded models from app.models.
-func (app *NaiveBayesApp) clearCachedModels() {
-	app.models = map[string]*Model{}
-}
-
 // StartServer starts the server listening on the port defined by the app object.
 func (app *NaiveBayesApp) StartServer() {
 	log.Printf("Listening on port: %s", app.port)
@@ -182,7 +178,7 @@ func (app *NaiveBayesApp) createModel(request *JSONRequest) *JSONResponse {
 
 	_, exists := app.models[model.Name]
 
-	if exists && request.Param("overwrite") != nil {
+	if exists && request.Param("overwrite") == nil {
 		return &JSONResponse{Error: fmt.Errorf("Could not create new model. Model %s already exists.", model.Name), Code: http.StatusConflict}
 	}
 
@@ -212,14 +208,18 @@ func (app *NaiveBayesApp) viewModel(request *JSONRequest) *JSONResponse {
 }
 
 /*
-   listModels displays the list of loaded models in JSON form.
-   Handles "load_all" query param to force loading of all models from files into memory.
+   listModels displays the list of loaded models in JSON form, in alphabetical order.
    * GET /models - Display the list of models
 */
 func (app *NaiveBayesApp) listModels(request *JSONRequest) *JSONResponse {
 	modelList := []*Model{}
-	for _, model := range app.models {
-		modelList = append(modelList, model)
+	var sortedNames []string
+	for k := range app.models {
+		sortedNames = append(sortedNames, k)
+	}
+	sort.Strings(sortedNames)
+	for _, modelName := range sortedNames {
+		modelList = append(modelList, app.models[modelName])
 	}
 	return &JSONResponse{Data: modelList, Code: http.StatusOK}
 }
